@@ -1,9 +1,3 @@
-export interface WebhookConfig {
-  webhookUrl: string;
-  avatarUrl: string;
-  username: string;
-}
-
 export interface BatterySnapshot {
   timestamp: number;
   level: number;
@@ -19,12 +13,13 @@ export interface ChargingSession {
   duration?: number;
 }
 
-export interface DailyReport {
-  date: string;
-  chargeCount: number;
-  totalUsageTime: number;
-  batteryDrain: number;
-  sessions: ChargingSession[];
+export interface Notification {
+  id: string;
+  type: 'charge_start' | 'charge_stop' | 'low_battery' | 'daily_report' | 'weekly_report';
+  title: string;
+  message: string;
+  timestamp: number;
+  data?: any;
 }
 
 export interface DailyBreakdown {
@@ -32,7 +27,6 @@ export interface DailyBreakdown {
   charges: number;
   chargingTime: number;
   batteryDrain: number;
-  note?: string;
 }
 
 export interface WeeklyReport {
@@ -46,13 +40,6 @@ export interface WeeklyReport {
   avgChargeDuration: number;
   avgDailyBatteryDrain: number;
   mostChargesDay: { date: string; count: number };
-  longestCharge: { date: string; duration: number };
   bestBatteryDay: { date: string; drain: number };
-  overnightCharges: number;
   dailyBreakdown: DailyBreakdown[];
-  comparisonWithLastWeek?: {
-    chargeTrend: number;
-    timeTrend: number;
-    drainTrend: number;
-  };
 }
