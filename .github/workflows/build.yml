@@ -1,60 +1,54 @@
-name: Build iOS IPA
+name: Build IPA on macOS
 
 on:
-  workflow_dispatch:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
 
 jobs:
-  build-ios:
-    name: Build IPA on macOS
+  build:
     runs-on: macos-latest
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Node.js
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
-          cache: npm
-          cache-dependency-path: BatteryWebhook/package-lock.json
+          node-version: '20'
+          cache: 'npm'
 
       - name: Install dependencies
-        working-directory: ./BatteryWebhook
-        run: npm ci
+        run: npm ci --legacy-peer-deps
+
+      - name: Install Expo CLI
+        run: npm install -g expo-cli
 
       - name: Prebuild iOS native project
-        working-directory: ./BatteryWebhook
-        run: npx expo prebuild --platform ios
+        run: npx expo prebuild --platform ios --clean
 
       - name: Build iOS App (unsigned)
-        working-directory: ./BatteryWebhook/ios
         run: |
-          WORKSPACE=$(find . -maxdepth 1 -name "*.xcworkspace" | head -n 1)
-          SCHEME=$(basename "$WORKSPACE" .xcworkspace)
-          echo "Workspace: $WORKSPACE"
-          echo "Scheme: $SCHEME"
-          xcodebuild \
-            -workspace "$WORKSPACE" \
-            -scheme "$SCHEME" \
+          cd ios
+          xcodebuild -workspace batterywebhook.xcworkspace \
+            -scheme batterywebhook \
             -configuration Release \
-            -sdk iphoneos \
             -derivedDataPath build \
-            CODE_SIGN_IDENTITY="" \
-            CODE_SIGNING_REQUIRED=NO \
+            -sdk iphoneos \
             CODE_SIGNING_ALLOWED=NO \
-            archive -archivePath build/App.xcarchive
+            build
 
       - name: Package IPA
         run: |
-          mkdir -p Payload
-          cp -r BatteryWebhook/ios/build/App.xcarchive/Products/Applications/*.app Payload/
-          zip -r output.ipa Payload/
-          rm -rf Payload
+          mkdir -p output
+          cp -r "ios/build/Build/Products/Release-iphoneos/batterywebhook.app" output/
+          cd output
+          zip -r BatteryMonitor.ipa Payload/
 
       - name: Upload IPA Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ios-release-ipa
-          path: output.ipa
-          retention-days: 3
+          name: BatteryMonitor-IPA
+          path: output/BatteryMonitor.ipa
