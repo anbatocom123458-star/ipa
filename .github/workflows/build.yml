@@ -1,48 +1,44 @@
 name: Build iOS IPA
 
 on:
-  workflow_dispatch: # Cho phép bạn bấm nút Run thủ công trên GitHub
+  workflow_dispatch:
 
 jobs:
   build-ios:
     name: Build IPA on macOS
-    runs-on: macos-latest # Sử dụng máy chủ macOS miễn phí của GitHub
+    runs-on: macos-latest
 
     steps:
-      # 1. Tải mã nguồn của bạn xuống máy ảo
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 2. Cài đặt môi trường Flutter (Bỏ qua bước này nếu bạn dùng iOS thuần/Xcode)
+      # QUAN TRỌNG: Chuyển vào thư mục chứa mã nguồn của bạn
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.19.x' # Thay phiên bản Flutter của bạn vào đây
+          flutter-version: '3.19.x'
           channel: 'stable'
           cache: true
 
-      # 3. Tải các gói phụ thuộc (Dependencies)
       - name: Install dependencies
+        working-directory: ./baopin_fixed  # <--- Thêm dòng này để trỏ đúng thư mục
         run: flutter pub get
 
-      # 4. Biên dịch ứng dụng iOS (Không cần ký mã nguồn để test build)
       - name: Build iOS App
-        run: |
-          flutter build ios --release --no-codesign
+        working-directory: ./baopin_fixed  # <--- Thêm dòng này
+        run: flutter build ios --release --no-codesign
 
-      # 5. Đóng gói thư mục ứng dụng thành file .ipa
       - name: Package IPA
         run: |
           mkdir -p Payload
-          # Đường dẫn tới thư mục App sau khi build (thay đổi tùy theo tên dự án của bạn)
-          mv build/ios/iphoneos/Runner.app Payload/
+          # Trỏ đúng đường dẫn tới thư mục build bên trong thư mục dự án
+          mv baopin_fixed/build/ios/iphoneos/Runner.app Payload/
           zip -r output.ipa Payload/
           rm -rf Payload
 
-      # 6. Lưu file .ipa vào phần Artifacts để tải về
       - name: Upload IPA Artifact
         uses: actions/upload-artifact@v4
         with:
           name: ios-release-ipa
           path: output.ipa
-          retention-days: 3 # Thời gian lưu file trên GitHub (tối đa tùy chọn)
+          retention-days: 3
