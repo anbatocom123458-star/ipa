@@ -1,0 +1,48 @@
+name: Build iOS IPA
+
+on:
+  workflow_dispatch: # Cho phép bạn bấm nút Run thủ công trên GitHub
+
+jobs:
+  build-ios:
+    name: Build IPA on macOS
+    runs-on: macos-latest # Sử dụng máy chủ macOS miễn phí của GitHub
+
+    steps:
+      # 1. Tải mã nguồn của bạn xuống máy ảo
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # 2. Cài đặt môi trường Flutter (Bỏ qua bước này nếu bạn dùng iOS thuần/Xcode)
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.19.x' # Thay phiên bản Flutter của bạn vào đây
+          channel: 'stable'
+          cache: true
+
+      # 3. Tải các gói phụ thuộc (Dependencies)
+      - name: Install dependencies
+        run: flutter pub get
+
+      # 4. Biên dịch ứng dụng iOS (Không cần ký mã nguồn để test build)
+      - name: Build iOS App
+        run: |
+          flutter build ios --release --no-codesign
+
+      # 5. Đóng gói thư mục ứng dụng thành file .ipa
+      - name: Package IPA
+        run: |
+          mkdir -p Payload
+          # Đường dẫn tới thư mục App sau khi build (thay đổi tùy theo tên dự án của bạn)
+          mv build/ios/iphoneos/Runner.app Payload/
+          zip -r output.ipa Payload/
+          rm -rf Payload
+
+      # 6. Lưu file .ipa vào phần Artifacts để tải về
+      - name: Upload IPA Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-release-ipa
+          path: output.ipa
+          retention-days: 3 # Thời gian lưu file trên GitHub (tối đa tùy chọn)
