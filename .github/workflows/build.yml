@@ -3,8 +3,7 @@ name: Build IPA on macOS
 on:
   push:
     branches: [ main ]
-  pull_request:
-    branches: [ main ]
+  workflow_dispatch:  # Cho phép chạy thủ công
 
 jobs:
   build:
@@ -14,15 +13,29 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: List files for debugging
+        run: |
+          pwd
+          ls -la
+          ls -la ../
+          find . -name "package.json" 2>/dev/null || true
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-          # Bỏ cache vì chưa có lock file
-          # cache: 'npm'
 
       - name: Install dependencies
-        run: npm install --legacy-peer-deps
+        run: |
+          if [ -f "package.json" ]; then
+            npm install --legacy-peer-deps
+          else
+            echo "❌ package.json not found in current directory!"
+            echo "Current directory: $(pwd)"
+            echo "Files:"
+            ls -la
+            exit 1
+          fi
 
       - name: Install Expo CLI
         run: npm install -g expo-cli
