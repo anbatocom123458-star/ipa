@@ -1,31 +1,20 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { WebhookConfig, BatterySnapshot, ChargingSession, WeeklyReport } from '../types';
+import { BatterySnapshot, ChargingSession, WeeklyReport, Notification } from '../types';
 
 const KEYS = {
-  CONFIG: '@battery_config',
   SNAPSHOTS: '@battery_snapshots',
   SESSIONS: '@battery_sessions',
-  LAST_DAILY: '@last_daily',
-  LAST_WEEKLY: '@last_weekly',
   WEEK_DATA: '@week_data',
+  NOTIFICATIONS: '@battery_notifications',
 };
 
 export class StorageService {
-  static async saveConfig(config: WebhookConfig): Promise<void> {
-    await AsyncStorage.setItem(KEYS.CONFIG, JSON.stringify(config));
-  }
-
-  static async getConfig(): Promise<WebhookConfig | null> {
-    const data = await AsyncStorage.getItem(KEYS.CONFIG);
-    return data ? JSON.parse(data) : null;
-  }
-
+  // Snapshots
   static async saveSnapshot(snapshot: BatterySnapshot): Promise<void> {
     const snaps = await this.getSnapshots();
     snaps.push(snapshot);
     const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
-    const filtered = snaps.filter((s: BatterySnapshot) => s.timestamp > weekAgo);
-    await AsyncStorage.setItem(KEYS.SNAPSHOTS, JSON.stringify(filtered));
+    await AsyncStorage.setItem(KEYS.SNAPSHOTS, JSON.stringify(snaps.filter(s => s.timestamp > weekAgo)));
   }
 
   static async getSnapshots(): Promise<BatterySnapshot[]> {
@@ -33,6 +22,7 @@ export class StorageService {
     return data ? JSON.parse(data) : [];
   }
 
+  // Sessions
   static async saveSession(session: ChargingSession): Promise<void> {
     const sessions = await this.getSessions();
     sessions.push(session);
@@ -41,7 +31,7 @@ export class StorageService {
 
   static async updateSession(id: string, updates: Partial<ChargingSession>): Promise<void> {
     const sessions = await this.getSessions();
-    const index = sessions.findIndex((s: ChargingSession) => s.id === id);
+    const index = sessions.findIndex(s => s.id === id);
     if (index !== -1) {
       sessions[index] = { ...sessions[index], ...updates };
       await AsyncStorage.setItem(KEYS.SESSIONS, JSON.stringify(sessions));
@@ -53,28 +43,24 @@ export class StorageService {
     return data ? JSON.parse(data) : [];
   }
 
-  static async getTodaySessions(): Promise<ChargingSession[]> {
-    const sessions = await this.getSessions();
-    const today = new Date().setHours(0, 0, 0, 0);
-    return sessions.filter((s: ChargingSession) => s.startTime >= today);
+  // Notifications
+  static async saveNotification(notification: Notification): Promise<void> {
+    const notifs = await this.getNotifications();
+    notifs.unshift(notification);
+    if (notifs.length > 100) notifs.pop();
+    await AsyncStorage.setItem(KEYS.NOTIFICATIONS, JSON.stringify(notifs));
   }
 
-  static async getLastDaily(): Promise<string | null> {
-    return AsyncStorage.getItem(KEYS.LAST_DAILY);
+  static async getNotifications(): Promise<Notification[]> {
+    const data = await AsyncStorage.getItem(KEYS.NOTIFICATIONS);
+    return data ? JSON.parse(data) : [];
   }
 
-  static async setLastDaily(date: string): Promise<void> {
-    await AsyncStorage.setItem(KEYS.LAST_DAILY, date);
+  static async clearNotifications(): Promise<void> {
+    await AsyncStorage.removeItem(KEYS.NOTIFICATIONS);
   }
 
-  static async getLastWeekly(): Promise<string | null> {
-    return AsyncStorage.getItem(KEYS.LAST_WEEKLY);
-  }
-
-  static async setLastWeekly(date: string): Promise<void> {
-    await AsyncStorage.setItem(KEYS.LAST_WEEKLY, date);
-  }
-
+  // Week data
   static async saveWeekData(data: WeeklyReport): Promise<void> {
     await AsyncStorage.setItem(KEYS.WEEK_DATA, JSON.stringify(data));
   }
