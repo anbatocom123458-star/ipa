@@ -12,27 +12,43 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # QUAN TRỌNG: Chuyển vào thư mục chứa mã nguồn của bạn
-      - name: Set up Flutter
-        uses: subosito/flutter-action@v2
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
         with:
-          flutter-version: '3.19.x'
-          channel: 'stable'
-          cache: true
+          node-version: 20
+          cache: npm
+          cache-dependency-path: BatteryWebhook/package-lock.json
 
       - name: Install dependencies
-        working-directory: ./baopin_fixed  # <--- Thêm dòng này để trỏ đúng thư mục
-        run: flutter pub get
+        working-directory: ./BatteryWebhook
+        run: npm ci
 
-      - name: Build iOS App
-        working-directory: ./baopin_fixed  # <--- Thêm dòng này
-        run: flutter build ios --release --no-codesign
+      - name: Prebuild iOS native project
+        working-directory: ./BatteryWebhook
+        run: npx expo prebuild --platform ios
+
+      - name: Build iOS App (unsigned)
+        working-directory: ./BatteryWebhook/ios
+        run: |
+          WORKSPACE=$(find . -maxdepth 1 -name "*.xcworkspace" | head -n 1)
+          SCHEME=$(basename "$WORKSPACE" .xcworkspace)
+          echo "Workspace: $WORKSPACE"
+          echo "Scheme: $SCHEME"
+          xcodebuild \
+            -workspace "$WORKSPACE" \
+            -scheme "$SCHEME" \
+            -configuration Release \
+            -sdk iphoneos \
+            -derivedDataPath build \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            archive -archivePath build/App.xcarchive
 
       - name: Package IPA
         run: |
           mkdir -p Payload
-          # Trỏ đúng đường dẫn tới thư mục build bên trong thư mục dự án
-          mv baopin_fixed/build/ios/iphoneos/Runner.app Payload/
+          cp -r BatteryWebhook/ios/build/App.xcarchive/Products/Applications/*.app Payload/
           zip -r output.ipa Payload/
           rm -rf Payload
 
