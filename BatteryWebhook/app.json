@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "BatteryWebhook",
-    "slug": "battery-webhook",
+    "name": "BatteryMonitor",
+    "slug": "battery-monitor",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -9,32 +9,23 @@
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#1a1a2e"
+      "backgroundColor": "#0f0f1a"
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.batterywebhook.app",
-      "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
-      }
+      "bundleIdentifier": "com.batterymonitor.app"
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/android-icon-foreground.png",
-        "backgroundColor": "#1a1a2e"
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#0f0f1a"
       },
-      "package": "com.batterywebhook.app"
+      "package": "com.batterymonitor.app"
     },
     "extra": {
       "eas": {
-        "projectId": "28900571-071f-4aef-b28f-a6d365154eb2"
+        "projectId": "your-project-id"
       }
-    },
-    "owner": "lucon2806s-team",
-    "sdkVersion": "57.0.0",
-    "platforms": [
-      "ios",
-      "android"
-    ]
+    }
   }
 }
