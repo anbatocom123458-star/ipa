@@ -12,28 +12,29 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Debug - List files
+      - name: Debug - Check structure
         run: |
           echo "Current directory: $(pwd)"
           ls -la
-          echo "=== BatteryWebhook folder ==="
-          ls -la BatteryWebhook/ || echo "BatteryWebhook folder not found!"
+          if [ -d "BatteryWebhook" ]; then
+            echo "=== BatteryWebhook folder ==="
+            ls -la BatteryWebhook/
+          fi
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
 
-      - name: Install dependencies
+      - name: Install dependencies (with legacy-peer-deps)
         working-directory: ./BatteryWebhook
         run: |
-          # Tạo package-lock.json nếu chưa có
-          if [ ! -f "package-lock.json" ]; then
-            echo "⚠️ package-lock.json not found, generating..."
-            npm install --legacy-peer-deps
-          else
-            npm ci --legacy-peer-deps
-          fi
+          # Xóa lock file cũ nếu có vấn đề
+          rm -f package-lock.json
+          # Cài lại từ đầu
+          npm install --legacy-peer-deps
+          # Tạo lock file mới
+          npm install --package-lock-only --legacy-peer-deps
 
       - name: Install Expo CLI
         working-directory: ./BatteryWebhook
@@ -66,13 +67,13 @@ jobs:
         working-directory: ./BatteryWebhook
         run: |
           mkdir -p Payload
-          # Tìm app file
           APP_PATH=$(find ios/build -name "*.app" -type d | head -n 1)
           echo "App path: $APP_PATH"
           if [ -n "$APP_PATH" ]; then
             cp -r "$APP_PATH" Payload/
             zip -r output.ipa Payload/
             echo "✅ IPA created successfully!"
+            ls -la output.ipa
           else
             echo "❌ No .app file found!"
             find ios/build -type d | head -20
