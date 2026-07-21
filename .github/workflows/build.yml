@@ -12,24 +12,41 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Debug - List files
+        run: |
+          echo "Current directory: $(pwd)"
+          ls -la
+          echo "=== BatteryWebhook folder ==="
+          ls -la BatteryWebhook/ || echo "BatteryWebhook folder not found!"
+
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: npm
-          cache-dependency-path: BatteryWebhook/package-lock.json
 
       - name: Install dependencies
         working-directory: ./BatteryWebhook
-        run: npm ci
+        run: |
+          # Tạo package-lock.json nếu chưa có
+          if [ ! -f "package-lock.json" ]; then
+            echo "⚠️ package-lock.json not found, generating..."
+            npm install --legacy-peer-deps
+          else
+            npm ci --legacy-peer-deps
+          fi
+
+      - name: Install Expo CLI
+        working-directory: ./BatteryWebhook
+        run: npm install -g expo-cli
 
       - name: Prebuild iOS native project
         working-directory: ./BatteryWebhook
-        run: npx expo prebuild --platform ios
+        run: npx expo prebuild --platform ios --clean
 
       - name: Build iOS App (unsigned)
-        working-directory: ./BatteryWebhook/ios
+        working-directory: ./BatteryWebhook
         run: |
+          cd ios
           WORKSPACE=$(find . -maxdepth 1 -name "*.xcworkspace" | head -n 1)
           SCHEME=$(basename "$WORKSPACE" .xcworkspace)
           echo "Workspace: $WORKSPACE"
@@ -43,18 +60,28 @@ jobs:
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO \
-            archive -archivePath build/App.xcarchive
+            build
 
       - name: Package IPA
+        working-directory: ./BatteryWebhook
         run: |
           mkdir -p Payload
-          cp -r BatteryWebhook/ios/build/App.xcarchive/Products/Applications/*.app Payload/
-          zip -r output.ipa Payload/
-          rm -rf Payload
+          # Tìm app file
+          APP_PATH=$(find ios/build -name "*.app" -type d | head -n 1)
+          echo "App path: $APP_PATH"
+          if [ -n "$APP_PATH" ]; then
+            cp -r "$APP_PATH" Payload/
+            zip -r output.ipa Payload/
+            echo "✅ IPA created successfully!"
+          else
+            echo "❌ No .app file found!"
+            find ios/build -type d | head -20
+            exit 1
+          fi
 
       - name: Upload IPA Artifact
         uses: actions/upload-artifact@v4
         with:
           name: ios-release-ipa
-          path: output.ipa
+          path: BatteryWebhook/output.ipa
           retention-days: 3
