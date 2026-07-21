@@ -12,29 +12,14 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Debug - Check structure
-        run: |
-          echo "Current directory: $(pwd)"
-          ls -la
-          if [ -d "BatteryWebhook" ]; then
-            echo "=== BatteryWebhook folder ==="
-            ls -la BatteryWebhook/
-          fi
-
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
 
-      - name: Install dependencies (with legacy-peer-deps)
+      - name: Install dependencies
         working-directory: ./BatteryWebhook
-        run: |
-          # Xóa lock file cũ nếu có vấn đề
-          rm -f package-lock.json
-          # Cài lại từ đầu
-          npm install --legacy-peer-deps
-          # Tạo lock file mới
-          npm install --package-lock-only --legacy-peer-deps
+        run: npm install --legacy-peer-deps
 
       - name: Install Expo CLI
         working-directory: ./BatteryWebhook
@@ -44,14 +29,19 @@ jobs:
         working-directory: ./BatteryWebhook
         run: npx expo prebuild --platform ios --clean
 
-      - name: Build iOS App (unsigned)
+      - name: Build iOS App (unsigned) - WITH FULL LOGS
         working-directory: ./BatteryWebhook
         run: |
           cd ios
           WORKSPACE=$(find . -maxdepth 1 -name "*.xcworkspace" | head -n 1)
           SCHEME=$(basename "$WORKSPACE" .xcworkspace)
-          echo "Workspace: $WORKSPACE"
-          echo "Scheme: $SCHEME"
+          echo "🔍 Workspace: $WORKSPACE"
+          echo "🔍 Scheme: $SCHEME"
+          echo "🔍 Current directory: $(pwd)"
+          echo "🔍 Files in ios:"
+          ls -la
+          
+          # Build với log chi tiết
           xcodebuild \
             -workspace "$WORKSPACE" \
             -scheme "$SCHEME" \
@@ -61,22 +51,34 @@ jobs:
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO \
-            build
+            build 2>&1 | tee build.log
+          
+          # Kiểm tra kết quả build
+          if [ $? -eq 0 ]; then
+            echo "✅ Build thành công!"
+          else
+            echo "❌ Build thất bại. Log cuối:"
+            tail -100 build.log
+            exit 1
+          fi
 
-      - name: Package IPA
+      - name: Find and Package IPA
         working-directory: ./BatteryWebhook
         run: |
-          mkdir -p Payload
+          echo "🔍 Tìm .app file..."
           APP_PATH=$(find ios/build -name "*.app" -type d | head -n 1)
-          echo "App path: $APP_PATH"
+          echo "APP_PATH: $APP_PATH"
+          
           if [ -n "$APP_PATH" ]; then
+            mkdir -p Payload
             cp -r "$APP_PATH" Payload/
             zip -r output.ipa Payload/
             echo "✅ IPA created successfully!"
             ls -la output.ipa
           else
-            echo "❌ No .app file found!"
-            find ios/build -type d | head -20
+            echo "❌ Không tìm thấy .app file!"
+            echo "🔍 Tìm kiếm trong ios/build:"
+            find ios/build -type d | head -30
             exit 1
           fi
 
