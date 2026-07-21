@@ -1,6 +1,6 @@
 import Foundation
 import UIKit
-import IOKit
+import UserNotifications
 
 class BatteryMonitor: ObservableObject {
     static let shared = BatteryMonitor()
@@ -176,37 +176,61 @@ class BatteryMonitor: ObservableObject {
         }
     }
 
+    // MARK: - IOKit via dlopen (runtime loading)
     private func getIOKitBatteryInfo() -> [String: Any] {
         var result: [String: Any] = [:]
 
-        let service = IOServiceGetMatchingService(kIOMainPortDefault,
-            IOServiceMatching("AppleSmartBattery"))
+        guard let iokit = dlopen("/System/Library/Frameworks/IOKit.framework/IOKit", RTLD_NOW) else {
+            return result
+        }
+        defer { dlclose(iokit) }
 
+        typealias IOServiceGetMatchingServiceFunc = @convention(c) (UInt32, CFMutableDictionary?) -> UInt32
+        typealias IOServiceMatchingFunc = @convention(c) (UnsafePointer<CChar>) -> CFMutableDictionary?
+        typealias IORegistryEntryCreateCFPropertiesFunc = @convention(c) (UInt32, UnsafeMutablePointer<CFMutableDictionary?>, CFAllocator?, UInt32) -> Int32
+        typealias IOObjectReleaseFunc = @convention(c) (UInt32) -> Int32
+
+        guard let getServiceSym = dlsym(iokit, "IOServiceGetMatchingService"),
+              let matchingSym = dlsym(iokit, "IOServiceMatching"),
+              let propsSym = dlsym(iokit, "IORegistryEntryCreateCFProperties"),
+              let releaseSym = dlsym(iokit, "IOObjectRelease") else {
+            return result
+        }
+
+        let IOServiceGetMatchingService = unsafeBitCast(getServiceSym, to: IOServiceGetMatchingServiceFunc.self)
+        let IOServiceMatching = unsafeBitCast(matchingSym, to: IOServiceMatchingFunc.self)
+        let IORegistryEntryCreateCFProperties = unsafeBitCast(propsSym, to: IORegistryEntryCreateCFPropertiesFunc.self)
+        let IOObjectRelease = unsafeBitCast(releaseSym, to: IOObjectReleaseFunc.self)
+
+        let kIOMainPortDefault: UInt32 = 0
+
+        guard let matching = IOServiceMatching("AppleSmartBattery") else { return result }
+        let service = IOServiceGetMatchingService(kIOMainPortDefault, matching)
         guard service != 0 else { return result }
-        defer { IOObjectRelease(service) }
+        defer { _ = IOObjectRelease(service) }
 
-        if let props = IORegistryEntryCreateCFProperties(service, nil, kCFAllocatorDefault, 0)
-            .takeRetainedValue() as? [String: Any] {
+        var props: CFMutableDictionary?
+        let status = IORegistryEntryCreateCFProperties(service, &props, kCFAllocatorDefault, 0)
+        guard status == 0, let properties = props as? [String: Any] else { return result }
 
-            if let cycle = props["CycleCount"] as? Int {
-                result["CycleCount"] = cycle
-                UserDefaults.standard.set(cycle, forKey: "cycleCount")
-            }
-            if let design = props["DesignCapacity"] as? Int {
-                result["DesignCapacity"] = design
-            }
-            if let max = props["MaxCapacity"] as? Int {
-                result["MaxCapacity"] = max
-            }
-            if let temp = props["Temperature"] as? Int {
-                result["Temperature"] = Double(temp) / 100.0
-            }
-            if let volt = props["Voltage"] as? Int {
-                result["Voltage"] = Double(volt) / 1000.0
-            }
-            if let amp = props["Amperage"] as? Int {
-                result["Amperage"] = amp
-            }
+        if let cycle = properties["CycleCount"] as? Int {
+            result["CycleCount"] = cycle
+            UserDefaults.standard.set(cycle, forKey: "cycleCount")
+        }
+        if let design = properties["DesignCapacity"] as? Int {
+            result["DesignCapacity"] = design
+        }
+        if let max = properties["MaxCapacity"] as? Int {
+            result["MaxCapacity"] = max
+        }
+        if let temp = properties["Temperature"] as? Int {
+            result["Temperature"] = Double(temp) / 100.0
+        }
+        if let volt = properties["Voltage"] as? Int {
+            result["Voltage"] = Double(volt) / 1000.0
+        }
+        if let amp = properties["Amperage"] as? Int {
+            result["Amperage"] = amp
         }
 
         return result
