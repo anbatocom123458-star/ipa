@@ -3,6 +3,8 @@ name: Build IPA
 on:
   push:
     branches: [main]
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 
 jobs:
@@ -12,17 +14,28 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Show Xcode version
-        run: xcodebuild -version
+      - name: Cache XcodeGen
+        uses: actions/cache@v4
+        with:
+          path: /opt/homebrew/Cellar/xcodegen
+          key: xcodegen-${{ runner.os }}-${{ hashFiles('project.yml') }}
+          restore-keys: xcodegen-${{ runner.os }}-
 
       - name: Install XcodeGen
-        run: brew install xcodegen
+        run: |
+          if ! command -v xcodegen &> /dev/null; then
+            brew install xcodegen
+          else
+            echo "XcodeGen already cached"
+          fi
+          xcodegen version
 
       - name: Generate Xcode Project
         run: xcodegen generate
 
       - name: Build Unsigned IPA
         run: |
+          set -o pipefail
           xcodebuild build \
             -project BatteryManager.xcodeproj \
             -scheme BatteryManager \
@@ -31,18 +44,50 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
-            DEVELOPMENT_TEAM=""
+            DEVELOPMENT_TEAM="" \
+            | tee $RUNNER_TEMP/build.log | xcpretty --color
 
+      - name: Package IPA
+        run: |
           APP_PATH=$(find $RUNNER_TEMP/DerivedData -name "BatteryManager.app" -type d | head -n 1)
+          if [ -z "$APP_PATH" ]; then
+            echo "ERROR: Could not find BatteryManager.app"
+            exit 1
+          fi
           echo "Found app at: $APP_PATH"
-
+          
           mkdir -p $RUNNER_TEMP/Payload
           cp -R "$APP_PATH" $RUNNER_TEMP/Payload/
           cd $RUNNER_TEMP
           zip -r BatteryManager.ipa Payload
+          ls -lh BatteryManager.ipa
 
-      - name: Upload IPA
+      - name: Upload Artifact
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: BatteryManager-IPA
           path: ${{ runner.temp }}/BatteryManager.ipa
+          retention-days: 30
+
+      - name: Upload to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v1
+        with:
+          files: ${{ runner.temp }}/BatteryManager.ipa
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Show Build Log on Failure
+        if: failure()
+        run: |
+          echo "========== BUILD ERRORS =========="
+          if [ -f $RUNNER_TEMP/build.log ]; then
+            grep -i "error:" $RUNNER_TEMP/build.log | head -40 || true
+            echo ""
+            echo "========== LAST 80 LINES =========="
+            tail -n 80 $RUNNER_TEMP/build.log
+          else
+            echo "No build log found"
+          fi
