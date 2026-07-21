@@ -1,6 +1,6 @@
 import Foundation
 import UIKit
-import UserNotifications
+import SwiftUI
 
 class BatteryMonitor: ObservableObject {
     static let shared = BatteryMonitor()
