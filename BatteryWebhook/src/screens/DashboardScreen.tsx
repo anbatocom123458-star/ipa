@@ -13,7 +13,13 @@ export default function DashboardScreen() {
 
   useEffect(() => {
     loadData();
-    const sub = Battery.addBatteryStateListener(({ batteryState }) => {
+
+    // % pin cập nhật ngay khi OS báo thay đổi, không phải chờ tới lần poll 30s kế tiếp
+    const levelSub = Battery.addBatteryLevelListener(({ batteryLevel }) => {
+      setLevel(batteryLevel);
+    });
+
+    const stateSub = Battery.addBatteryStateListener(async ({ batteryState }) => {
       const states: Record<number, string> = {
         [Battery.BatteryState.CHARGING]: 'Đang sạc ⚡',
         [Battery.BatteryState.FULL]: 'Đã đầy 🔋',
@@ -21,17 +27,22 @@ export default function DashboardScreen() {
         [Battery.BatteryState.UNKNOWN]: 'Không xác định',
       };
       setState(states[batteryState] || 'Không xác định');
+      const lvl = await Battery.getBatteryLevelAsync();
+      setLevel(lvl);
     });
 
     const interval = setInterval(loadData, 30000);
-    return () => { sub.remove(); clearInterval(interval); };
+    return () => { levelSub.remove(); stateSub.remove(); clearInterval(interval); };
   }, []);
 
   const loadData = async () => {
     const lvl = await Battery.getBatteryLevelAsync();
     setLevel(lvl);
     const data = await StorageService.getSnapshots();
-    setSnaps(data.slice(-24));
+    // Lọc theo mốc 24h thực tế thay vì đếm 24 điểm gần nhất — giờ snapshot
+    // ghi nhận dày hơn (theo mỗi lần đổi %) nên đếm cố định sẽ không còn khớp 24h
+    const dayAgo = Date.now() - 24 * 60 * 60 * 1000;
+    setSnaps(data.filter((s: BatterySnapshot) => s.timestamp > dayAgo));
     const w = await StorageService.getWeekData();
     if (w) setWeekly(w);
   };
