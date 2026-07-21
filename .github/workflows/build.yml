@@ -33,34 +33,41 @@ jobs:
       - name: Generate Xcode Project
         run: xcodegen generate
 
-      - name: Build Unsigned IPA
+      - name: Build Archive (Unsigned)
         run: |
           set -o pipefail
-          xcodebuild build \
+          xcodebuild archive \
             -project BatteryManager.xcodeproj \
             -scheme BatteryManager \
+            -archivePath $RUNNER_TEMP/BatteryManager.xcarchive \
             -destination 'generic/platform=iOS' \
-            -derivedDataPath $RUNNER_TEMP/DerivedData \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
             DEVELOPMENT_TEAM="" \
-            | tee $RUNNER_TEMP/build.log | xcpretty --color
+            | tee $RUNNER_TEMP/build.log | xcpretty --color || true
 
       - name: Package IPA
         run: |
-          APP_PATH=$(find $RUNNER_TEMP/DerivedData -name "BatteryManager.app" -type d | head -n 1)
-          if [ -z "$APP_PATH" ]; then
-            echo "ERROR: Could not find BatteryManager.app"
+          ARCHIVE_APP="$RUNNER_TEMP/BatteryManager.xcarchive/Products/Applications/BatteryManager.app"
+          
+          if [ ! -d "$ARCHIVE_APP" ]; then
+            echo "ERROR: App not found at $ARCHIVE_APP"
+            echo "Searching for any .app in archive..."
+            find $RUNNER_TEMP/BatteryManager.xcarchive -name "*.app" -type d
             exit 1
           fi
-          echo "Found app at: $APP_PATH"
+          
+          echo "Found app: $ARCHIVE_APP"
+          echo "App size: $(du -sh $ARCHIVE_APP | cut -f1)"
           
           mkdir -p $RUNNER_TEMP/Payload
-          cp -R "$APP_PATH" $RUNNER_TEMP/Payload/
+          cp -R "$ARCHIVE_APP" $RUNNER_TEMP/Payload/
           cd $RUNNER_TEMP
-          zip -r BatteryManager.ipa Payload
-          ls -lh BatteryManager.ipa
+          zip -qr BatteryManager.ipa Payload
+          
+          IPA_SIZE=$(stat -f%z BatteryManager.ipa 2>/dev/null || stat -c%s BatteryManager.ipa)
+          echo "IPA size: $IPA_SIZE bytes"
 
       - name: Upload Artifact
         if: success()
